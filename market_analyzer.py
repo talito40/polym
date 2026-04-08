@@ -24,6 +24,7 @@ def analyze_market(
     market_data: dict,
     midpoint: float,
     book_summary: Optional[dict],
+    kalshi_info: Optional[dict] = None,
 ) -> Optional[dict]:
     question = market_data.get("question", "")
     days_to_close = market_data.get("_days_to_close", "?")
@@ -31,6 +32,23 @@ def analyze_market(
     spread = book_summary.get("spread") if book_summary else None
     best_bid = book_summary.get("best_bid") if book_summary else None
     best_ask = book_summary.get("best_ask") if book_summary else None
+
+    # Build Kalshi cross-platform context block if available
+    kalshi_context = ""
+    if kalshi_info:
+        k_mid = kalshi_info.get("kalshi_mid", kalshi_info.get("mid"))
+        k_title = kalshi_info.get("kalshi_title", kalshi_info.get("title", ""))
+        if k_mid is not None:
+            divergence = k_mid - midpoint
+            direction = "agrees with Polymarket" if abs(divergence) < 0.05 else (
+                "prices this HIGHER than Polymarket" if divergence > 0 else "prices this LOWER than Polymarket"
+            )
+            kalshi_context = (
+                f"\nKalshi cross-platform signal: A closely related market on Kalshi "
+                f"({k_title[:60]}) is priced at {k_mid:.3f} — Kalshi {direction} "
+                f"(divergence: {divergence:+.3f}). Large divergence suggests one platform "
+                f"may be mispriced. Factor this into your estimate."
+            )
 
     prompt = f"""You are analyzing a prediction market on Polymarket. Based only on your knowledge and reasoning, estimate the true probability of this outcome occurring.
 
@@ -40,7 +58,7 @@ Best bid: {best_bid}
 Best ask: {best_ask}
 Spread: {spread}
 Volume (USDC): {volume}
-Days until market closes: {days_to_close}
+Days until market closes: {days_to_close}{kalshi_context}
 
 Respond ONLY with a JSON object in this exact format (no markdown, no extra text):
 {{
@@ -62,7 +80,13 @@ Rules:
             max_tokens=200,
             messages=[{"role": "user", "content": prompt}],
         )
-        text = response.content[0].text.strip()
+        text = next((b.text for b in response.content if hasattr(b, "text")), "").strip()
+        # Strip markdown code fences if present
+        if text.startswith("```"):
+            text = text.split("```")[1]
+            if text.startswith("json"):
+                text = text[4:]
+            text = text.strip()
         result = json.loads(text)
 
         prob = float(result["probability"])
