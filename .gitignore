@@ -1,9 +1,26 @@
+# Logs
+*.log
+
+# State files
+*_state.json
+divergence.log
+
+# Environment
 .env
-state.json
-logs/
+
+# Python
 __pycache__/
 *.pyc
 *.pyo
-.DS_Store
-venv/
-.venv/
+
+# SSH/deploy helpers (session artifacts)
+ssh_*.py
+ssh_result.txt
+run_remote.py
+run_ssh.bat
+*_remote.py
+*_new.py
+redeem_temp.py
+
+# Claude Code session data
+.claude/
